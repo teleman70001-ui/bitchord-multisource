@@ -1,0 +1,9 @@
+services:
+  bitchord-multisource:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - TIDAL_API_URL=${TIDAL_API_URL:-}
+    restart: unless-stopped
