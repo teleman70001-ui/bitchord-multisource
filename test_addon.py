@@ -16,6 +16,7 @@ check(s.duration_to_seconds(None) is None, "missing length")
 # manifest contract (addon docs: id required, quality picker best-first)
 check(s.MANIFEST["id"], "manifest id")
 check("search" in s.MANIFEST["resources"], "search resource declared")
+check(s.MANIFEST.get("bitchordAuth") is True, "bitchordAuth flag clears the Outdated addon note")
 opts = s.MANIFEST["settings"][0]["options"]
 check(opts[0]["value"] == "lossless", "best quality listed first")
 check(len(opts) >= 2, "picker needs >=2 options")

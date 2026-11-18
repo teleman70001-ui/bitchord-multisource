@@ -19,13 +19,53 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(os.environ.get("PORT", "8080"))
 TIDAL_API_URL = os.environ.get("TIDAL_API_URL", "").rstrip("/")
 TIMEOUT = float(os.environ.get("PROVIDER_TIMEOUT", "8"))
-UA = {"User-Agent": "bitchord-multisource/0.1"}
+UA = {"User-Agent": "bitchord-multisource/0.2"}
+
+# Addon auth (official verifier, vendored as bitchord_addon_auth.py).
+# BITCHORD_AUTH=log     verify BitChord's hardware proof, log failures, serve everyone
+#                       (official rollout step 1; clears the app's "Outdated addon" note)
+# BITCHORD_AUTH=enforce 401 for anything that is not the official BitChord Android app
+#                       (refuses rooted phones, emulators, desktop — see addon docs)
+# BITCHORD_AUTH=off      no checking at all; manifest still declares the flag
+# BITCHORD_AUTH_HOSTS    comma-separated public hostnames the addon is reached at
+AUTH_MODE = os.environ.get("BITCHORD_AUTH", "log").lower()
+_AUTH = None
+_AUTH_BROKEN = False
+
+
+def auth_check(headers):
+    """(served, refusal) — refusal is a verifier Result to send verbatim."""
+    global _AUTH, _AUTH_BROKEN
+    if AUTH_MODE == "off":
+        return True, None
+    if _AUTH is None and not _AUTH_BROKEN:
+        hosts = [h for h in os.environ.get("BITCHORD_AUTH_HOSTS", "").split(",") if h.strip()]
+        if not hosts:
+            print("[auth] BITCHORD_AUTH_HOSTS empty; cannot verify — serving everyone", flush=True)
+            _AUTH_BROKEN = True
+        else:
+            try:
+                from bitchord_addon_auth import BitChordAuth
+                _AUTH = BitChordAuth(hosts=hosts)
+            except ImportError as exc:
+                print(f"[auth] verifier unavailable ({exc}); pip install cryptography, or BITCHORD_AUTH=off", flush=True)
+                _AUTH_BROKEN = True
+    if _AUTH is None:
+        return True, None
+    result = _AUTH.verify_headers(headers)
+    if result.ok:
+        return True, None
+    if AUTH_MODE == "enforce":
+        return False, result
+    print(f"[auth] would refuse: {result.error} ({result.message})", flush=True)
+    return True, None
 
 MANIFEST = {
     "id": "teleman70001.multisource",
     "name": "Multisource (Internet Archive + Tidal)",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "resources": ["search", "stream"],
+    "bitchordAuth": True,
     "settings": [
         {
             "key": "quality",
@@ -146,6 +186,7 @@ def _item_rows(doc, tokens, quality):
     rows = []
     for f in files[:2]:
         name = f["name"]
+        direct = f"https://archive.org/download/{ident}/{urllib.parse.quote(name)}"
         rows.append({
             "id": f"archive:{ident}:{name}",
             "title": _file_title(name, files_by_name),
@@ -155,6 +196,7 @@ def _item_rows(doc, tokens, quality):
             "artworkURL": f"https://archive.org/services/img/{ident}",
             "format": fmt,
             "audioQuality": tier,
+            "streamURL": direct,
         })
     return rows
 
@@ -332,8 +374,19 @@ class Handler(BaseHTTPRequestHandler):
         params = urllib.parse.parse_qs(parsed.query)
         path = parsed.path
         try:
-            if path == "/manifest.json":
+            if path == "/manifest.json":  # stays public per the addon-auth contract
                 return self._send(200, MANIFEST)
+            if path != "/":
+                served, refusal = auth_check(dict(self.headers))
+                if not served:
+                    body = refusal.body.encode()
+                    self.send_response(refusal.status)
+                    for k, v in refusal.headers.items():
+                        self.send_header(k, v)
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
             if path == "/health":
                 return self._send(200, health())
             if path == "/search":

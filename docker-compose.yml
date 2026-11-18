@@ -6,4 +6,6 @@ services:
     environment:
       - PORT=8080
       - TIDAL_API_URL=${TIDAL_API_URL:-}
+      - BITCHORD_AUTH=${BITCHORD_AUTH:-log}
+      - BITCHORD_AUTH_HOSTS=${BITCHORD_AUTH_HOSTS:-}
     restart: unless-stopped
