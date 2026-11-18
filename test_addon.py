@@ -17,6 +17,7 @@ check(s.duration_to_seconds(None) is None, "missing length")
 check(s.MANIFEST["id"], "manifest id")
 check("search" in s.MANIFEST["resources"], "search resource declared")
 check(s.MANIFEST.get("bitchordAuth") is True, "bitchordAuth flag clears the Outdated addon note")
+check((s.MANIFEST.get("bitchordAuth") is None) == (s.AUTH_MODE == "off"), "off mode drops the flag")
 opts = s.MANIFEST["settings"][0]["options"]
 check(opts[0]["value"] == "lossless", "best quality listed first")
 check(len(opts) >= 2, "picker needs >=2 options")

@@ -32,7 +32,6 @@ AUTH_MODE = os.environ.get("BITCHORD_AUTH", "log").lower()
 _AUTH = None
 _AUTH_BROKEN = False
 
-
 def auth_check(headers):
     """(served, refusal) — refusal is a verifier Result to send verbatim."""
     global _AUTH, _AUTH_BROKEN
@@ -63,7 +62,7 @@ def auth_check(headers):
 MANIFEST = {
     "id": "teleman70001.multisource",
     "name": "Multisource (Internet Archive + Tidal)",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "resources": ["search", "stream"],
     "bitchordAuth": True,
     "settings": [
@@ -351,6 +350,13 @@ def health():
             },
         },
     }
+
+
+# With BITCHORD_AUTH=off the manifest stops advertising the flag entirely, so
+# the app never contacts BitChord's auth service (survives networks where that
+# service is unreachable); the app then shows its cosmetic "Outdated addon" note.
+if AUTH_MODE == "off":
+    MANIFEST.pop("bitchordAuth", None)
 
 
 class Handler(BaseHTTPRequestHandler):
